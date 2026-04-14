@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PROWORK · Monitor de Fretes</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0d12;
+  --surface: #111620;
+  --surface2: #161d2a;
+  --border: #1f2d40;
+  --accent: #00c8ff;
+  --accent2: #0077ff;
+  --green: #00e676;
+  --red: #ff3d5a;
+  --yellow: #ffb800;
+  --orange: #ff6b00;
+  --text: #e2eaf5;
+  --muted: #5a7080;
+  --font-head: 'Rajdhani', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --font-body: 'IBM Plex Sans', sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);min-height:100vh;overflow-x:hidden}
+
+/* ── HEADER ── */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;z-index:100}
+.logo{font-family:var(--font-head);font-size:22px;font-weight:700;letter-spacing:2px;color:var(--accent)}
+.logo span{color:var(--text);opacity:.5}
+.header-time{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+#live-clock{color:var(--accent);font-weight:500}
+
+/* ── NAV TABS ── */
+.nav-tabs{display:flex;gap:2px;background:var(--bg);padding:16px 24px 0;border-bottom:1px solid var(--border)}
+.tab-btn{font-family:var(--font-head);font-size:15px;font-weight:600;letter-spacing:1px;padding:10px 24px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;transition:.2s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── MAIN ── */
+main{padding:24px;max-width:1600px;margin:0 auto}
+
+/* ── KPI CARDS ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 20px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--accent)}
+.kpi.green::before{background:var(--green)}
+.kpi.red::before{background:var(--red)}
+.kpi.yellow::before{background:var(--yellow)}
+.kpi.orange::before{background:var(--orange)}
+.kpi-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
+.kpi-value{font-family:var(--font-head);font-size:32px;font-weight:700;line-height:1}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:6px}
+
+/* ── FILTERS ── */
+.filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;align-items:center}
+.filter-group{display:flex;flex-direction:column;gap:4px}
+.filter-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+select,input[type=text],input[type=date]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-family:var(--font-body);font-size:13px;outline:none;transition:.2s}
+select:focus,input:focus{border-color:var(--accent)}
+select option{background:var(--surface2)}
+.btn{padding:8px 18px;border-radius:6px;border:none;font-family:var(--font-head);font-size:14px;font-weight:600;letter-spacing:1px;cursor:pointer;transition:.2s}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:#00aedd}
+.btn-danger{background:var(--red);color:#fff}
+.btn-success{background:var(--green);color:#000}
+.btn-outline{background:none;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:5px 12px;font-size:12px}
+
+/* ── TABLE ── */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.table-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.table-title{font-family:var(--font-head);font-size:16px;font-weight:600;letter-spacing:1px}
+.table-count{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{background:var(--surface2);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:10px 12px;text-align:left;font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(0,200,255,.04)}
+.tbl td.mono{font-family:var(--font-mono);font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;letter-spacing:.5px}
+.badge.entregue{background:rgba(0,230,118,.15);color:var(--green)}
+.badge.atrasado{background:rgba(255,61,90,.15);color:var(--red)}
+.badge.transito{background:rgba(255,184,0,.15);color:var(--yellow)}
+.badge.alerta{background:rgba(255,107,0,.15);color:var(--orange)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+
+/* ── TIMER BAR ── */
+.timer-bar{height:4px;border-radius:2px;background:var(--border);overflow:hidden;margin-top:6px}
+.timer-fill{height:100%;border-radius:2px;transition:width .3s}
+.progress-text{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:3px}
+
+/* ── PAGINATION ── */
+.pagination{display:flex;align-items:center;gap:8px;padding:14px 18px;justify-content:flex-end;border-top:1px solid var(--border)}
+.page-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:4px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer;font-size:13px;transition:.2s}
+.page-btn:hover{border-color:var(--accent);color:var(--accent)}
+.page-btn.active{background:var(--accent);color:#000;border-color:var(--accent)}
+.page-info{font-size:12px;color:var(--muted);font-family:var(--font-mono)}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;position:relative}
+.modal-title{font-family:var(--font-head);font-size:20px;font-weight:700;letter-spacing:1px;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.modal-close{position:absolute;top:16px;right:18px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1}
+.modal-close:hover{color:var(--text)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:1/-1}
+.form-group label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.form-group input,
+.form-group select,
+.form-group textarea{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-family:var(--font-body);font-size:13px;outline:none;transition:.2s}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus{border-color:var(--accent)}
+.form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* ── REPORT VIEW ── */
+.report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:24px}
+.carrier-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;transition:.2s;cursor:pointer}
+.carrier-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.carrier-name{font-family:var(--font-head);font-size:20px;font-weight:700;letter-spacing:1px;margin-bottom:14px;color:var(--accent)}
+.carrier-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--surface2);border-radius:6px;padding:12px}
+.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.stat-value{font-family:var(--font-head);font-size:20px;font-weight:700}
+
+/* ── REPORT TABLE ── */
+.report-detail{display:none;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:24px}
+.report-detail.open{display:block}
+.report-detail-title{font-family:var(--font-head);font-size:18px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.print-btn{margin-left:auto}
+
+/* ── SECTION ── */
+.section{display:none}
+.section.active{display:block}
+
+/* ── ALERT BELL ── */
+.alert-badge{background:var(--red);color:#fff;width:18px;height:18px;border-radius:50%;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-left:6px;vertical-align:middle}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── PRINT ── */
+@media print{
+  header,.nav-tabs,.filters,.pagination,.btn,button:not(.print-keep){display:none!important}
+  body{background:#fff;color:#000}
+  .report-detail{display:block!important;border:none}
+  .carrier-card,.stat{background:#f5f5f5;border:1px solid #ddd}
+  .tbl th{background:#e0e0e0;color:#333}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">PROWORK <span>·</span> FRETES</div>
+  <div class="header-time">
+    <span id="live-clock"></span> &nbsp;|&nbsp; Sistema de Monitoramento Logístico
+  </div>
+</header>
+
+<div class="nav-tabs">
+  <button class="tab-btn active" onclick="showSection('monitoramento')">📦 Monitoramento</button>
+  <button class="tab-btn" onclick="showSection('atrasadas')" id="tab-atrasadas">⚠️ Em Atraso</button>
+  <button class="tab-btn" onclick="showSection('entregues')">✅ Entregues</button>
+  <button class="tab-btn" onclick="showSection('relatorio')">📊 Relatório por Transportadora</button>
+</div>
+
+<main>
+
+<!-- ═══ SECTION: MONITORAMENTO ═══ -->
+<div class="section active" id="sec-monitoramento">
+  <div class="kpi-grid" id="kpi-grid"></div>
+
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Transportadora</span>
+      <select id="flt-transportadora" onchange="applyFilters()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Mês</span>
+      <select id="flt-mes" onchange="applyFilters()">
+        <option value="">Todos</option>
+        <option>Janeiro</option>
+        <option>Fevereiro</option>
+        <option>Março</option>
+        <option>Abril</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Status</span>
+      <select id="flt-status" onchange="applyFilters()">
+        <option value="">Todos</option>
+        <option value="transito">Em Trânsito</option>
+        <option value="entregue">Entregue</option>
+        <option value="atrasado">Atrasado</option>
+        <option value="alerta">Chegando no Limite</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Buscar NF / Pedido</span>
+      <input type="text" id="flt-busca" placeholder="NF ou nº pedido..." oninput="applyFilters()">
+    </div>
+    <div class="filter-group" style="justify-content:flex-end;margin-left:auto;margin-top:16px">
+      <button class="btn btn-primary" onclick="openAddModal()">+ Nova NF</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">Notas Fiscais em Monitoramento</span>
+      <span class="table-count" id="table-count-all">— registros</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tbl-main">
+        <thead>
+          <tr>
+            <th>Pedido</th><th>NF</th><th>Transportadora</th>
+            <th>Dt Venda</th><th>Dt Embarque</th><th>Dt Entrega</th>
+            <th>Prazo (dias)</th><th>Status</th><th>Progresso</th>
+            <th>Frete (R$)</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-main"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pag-main"></div>
+  </div>
+</div>
+
+<!-- ═══ SECTION: ATRASADAS ═══ -->
+<div class="section" id="sec-atrasadas">
+  <div class="kpi-grid" id="kpi-atrasadas"></div>
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title" style="color:var(--red)">⚠ Notas em Atraso</span>
+      <span class="table-count" id="table-count-atrasadas">— registros</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tbl-atrasadas">
+        <thead>
+          <tr>
+            <th>Pedido</th><th>NF</th><th>Transportadora</th>
+            <th>Dt Embarque</th><th>Previsão Entrega</th>
+            <th>Dias em Atraso</th><th>Frete (R$)</th><th>Observação</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-atrasadas"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pag-atrasadas"></div>
+  </div>
+</div>
+
+<!-- ═══ SECTION: ENTREGUES ═══ -->
+<div class="section" id="sec-entregues">
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title" style="color:var(--green)">✔ Notas Entregues</span>
+      <span class="table-count" id="table-count-entregues">— registros</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tbl-entregues">
+        <thead>
+          <tr>
+            <th>Pedido</th><th>NF</th><th>Transportadora</th>
+            <th>Dt Embarque</th><th>Dt Entrega</th>
+            <th>Dias Transporte</th><th>Frete (R$)</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-entregues"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pag-entregues"></div>
+  </div>
+</div>
+
+<!-- ═══ SECTION: RELATÓRIO ═══ -->
+<div class="section" id="sec-relatorio">
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Filtrar Mês</span>
+      <select id="flt-rel-mes" onchange="buildReport()">
+        <option value="">Todos os meses</option>
+        <option>Janeiro</option><option>Fevereiro</option>
+        <option>Março</option><option>Abril</option>
+      </select>
+    </div>
+    <div style="margin-left:auto;margin-top:16px">
+      <button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir Relatório</button>
+    </div>
+  </div>
+  <div class="report-grid" id="report-grid"></div>
+  <div class="report-detail" id="report-detail">
+    <div class="report-detail-title">
+      <span id="rpt-carrier-name"></span>
+      <span class="badge transito" id="rpt-period"></span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tbl-rpt-detail">
+        <thead>
+          <tr>
+            <th>Pedido</th><th>NF</th><th>Dt Embarque</th><th>Dt Entrega</th>
+            <th>Dias Transporte</th><th>Frete (R$)</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-rpt-detail"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<!-- ═══ MODAL: ADD/EDIT NF ═══ -->
+<div class="modal-overlay" id="modal-nf">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Nova Nota Fiscal</div>
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Número do Pedido</label>
+        <input type="text" id="inp-pedido" placeholder="Ex: 20900">
+      </div>
+      <div class="form-group">
+        <label>Nota Fiscal (NF)</label>
+        <input type="text" id="inp-nf" placeholder="Ex: 1234">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data da Venda (entrada no sistema)</label>
+        <input type="date" id="inp-venda">
+      </div>
+      <div class="form-group">
+        <label>Data de Embarque (envio)</label>
+        <input type="date" id="inp-envio">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data de Entrega (real ou prevista)</label>
+        <input type="date" id="inp-entrega">
+      </div>
+      <div class="form-group">
+        <label>Prazo de Entrega (dias)</label>
+        <input type="number" id="inp-prazo" placeholder="Ex: 7" min="1">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Transportadora</label>
+        <select id="inp-transp">
+          <option value="">Selecione...</option>
+          <option>ALFA</option><option>MOVVI</option><option>TNT</option>
+          <option>NADER</option><option>BRASPRESS</option><option>AVIÕES</option>
+          <option value="__nova__">+ Nova transportadora</option>
+        </select>
+      </div>
+      <div class="form-group" id="grp-nova-transp" style="display:none">
+        <label>Nome da Transportadora</label>
+        <input type="text" id="inp-nova-transp" placeholder="Nome da transportadora">
+      </div>
+      <div class="form-group">
+        <label>Valor do Frete (R$)</label>
+        <input type="number" id="inp-frete" placeholder="Ex: 75.00" step="0.01">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group full">
+        <label>Observação</label>
+        <textarea id="inp-obs" rows="2" placeholder="Situação, ocorrências..."></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveNF()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: MARCAR ENTREGUE ═══ -->
+<div class="modal-overlay" id="modal-entrega">
+  <div class="modal">
+    <div class="modal-title">Registrar Entrega</div>
+    <button class="modal-close" onclick="closeModal2()">✕</button>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Informe a data em que a NF foi efetivamente entregue.</p>
+    <div class="form-group">
+      <label>NF: <strong id="entrega-nf"></strong> &nbsp;|&nbsp; Pedido: <strong id="entrega-pedido"></strong></label>
+      <input type="date" id="inp-dt-entrega-real">
+    </div>
+    <div class="form-group" style="margin-top:12px">
+      <label>Observação</label>
+      <textarea id="inp-entrega-obs" rows="2" placeholder="Observações sobre a entrega..."></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal2()">Cancelar</button>
+      <button class="btn btn-success" onclick="confirmEntrega()">✔ Confirmar Entrega</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  DATA LAYER
+// ═══════════════════════════════════════════════════
+const STORAGE_KEY = 'prowork_fretes_v2';
+let editingIdx = null;
+let entregaIdx = null;
+
+// Load from localStorage or seed from embedded data
+function loadData() {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored) return JSON.parse(stored);
+  return null; // will load from fetch
+}
+
+function saveData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+let DB = [];
+
+// ═══════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════
+async function init() {
+  // Clock
+  setInterval(() => {
+    const now = new Date();
+    document.getElementById('live-clock').textContent =
+      now.toLocaleDateString('pt-BR') + ' ' + now.toTimeString().slice(0,8);
+  }, 1000);
+
+  // Load data
+  const stored = loadData();
+  if (stored && stored.length > 0) {
+    DB = stored;
+  } else {
+    const resp = await fetch('data.json');
+    const raw = await resp.json();
+    DB = raw.map(r => ({
+      ...r,
+      prazo: r.dias_transporte || 7,
+      obs: '',
+      status_manual: null, // null = auto
+    }));
+    saveData(DB);
+  }
+
+  // Populate transportadora filter
+  const transportadoras = [...new Set(DB.map(r=>r.transportadora).filter(Boolean))].sort();
+  const sel = document.getElementById('flt-transportadora');
+  transportadoras.forEach(t => {
+    const o = document.createElement('option'); o.value=o.textContent=t; sel.appendChild(o);
+  });
+
+  buildAll();
+}
+
+// ═══════════════════════════════════════════════════
+//  STATUS LOGIC
+// ═══════════════════════════════════════════════════
+function getStatus(r) {
+  if (r.status_manual) return r.status_manual;
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (r.dt_entrega) return 'entregue';
+  if (!r.dt_envio) return 'transito';
+  const envio = new Date(r.dt_envio);
+  const prazo = r.prazo || 7;
+  const deadline = new Date(envio); deadline.setDate(deadline.getDate() + prazo);
+  const diasRestantes = Math.ceil((deadline - today) / 86400000);
+  if (diasRestantes < 0) return 'atrasado';
+  if (diasRestantes <= 1) return 'alerta';
+  return 'transito';
+}
+
+function getDiasAtraso(r) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (!r.dt_envio) return 0;
+  const envio = new Date(r.dt_envio);
+  const prazo = r.prazo || 7;
+  const deadline = new Date(envio); deadline.setDate(deadline.getDate() + prazo);
+  return Math.max(0, Math.ceil((today - deadline) / 86400000));
+}
+
+function getProgresso(r) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (!r.dt_envio) return {pct:0, label:'—'};
+  const envio = new Date(r.dt_envio);
+  const prazo = r.prazo || 7;
+  const diasPassados = Math.ceil((today - envio) / 86400000);
+  const pct = Math.min(100, Math.round((diasPassados / prazo) * 100));
+  return {pct, label: `${diasPassados}/${prazo} dias`};
+}
+
+const BADGE = {
+  entregue: `<span class="badge entregue"><span class="dot"></span>Entregue</span>`,
+  atrasado:  `<span class="badge atrasado"><span class="dot"></span>Atrasado</span>`,
+  transito:  `<span class="badge transito"><span class="dot"></span>Em Trânsito</span>`,
+  alerta:    `<span class="badge alerta"><span class="dot"></span>No Limite</span>`,
+};
+
+function fmtDate(d) {
+  if(!d) return '—';
+  const [y,m,dd] = d.split('-');
+  return `${dd}/${m}/${y}`;
+}
+function fmtBRL(v) {
+  if(v==null) return '—';
+  return 'R$ ' + Number(v).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+}
+
+// ═══════════════════════════════════════════════════
+//  FILTERS
+// ═══════════════════════════════════════════════════
+let currentPage = {all:1, atrasadas:1, entregues:1};
+const PAGE_SIZE = 50;
+
+function getFiltered() {
+  const transp = document.getElementById('flt-transportadora').value;
+  const mes = document.getElementById('flt-mes').value;
+  const status = document.getElementById('flt-status').value;
+  const busca = document.getElementById('flt-busca').value.toLowerCase();
+  return DB.filter(r => {
+    if (transp && r.transportadora !== transp) return false;
+    if (mes && r.mes !== mes) return false;
+    if (status && getStatus(r) !== status) return false;
+    if (busca && !r.nf.includes(busca) && !r.pedido.toLowerCase().includes(busca)) return false;
+    return true;
+  });
+}
+
+function applyFilters() {
+  currentPage.all = 1;
+  buildMain();
+  buildKPIs();
+}
+
+// ═══════════════════════════════════════════════════
+//  BUILD KPIs
+// ═══════════════════════════════════════════════════
+function buildKPIs() {
+  const filtered = getFiltered();
+  const total = filtered.length;
+  const entregues = filtered.filter(r=>getStatus(r)==='entregue').length;
+  const transito = filtered.filter(r=>getStatus(r)==='transito').length;
+  const atrasados = filtered.filter(r=>getStatus(r)==='atrasado').length;
+  const alertas = filtered.filter(r=>getStatus(r)==='alerta').length;
+  const freteTotal = filtered.reduce((s,r)=>s+(r.frete||0),0);
+
+  // Update alert badge on tab
+  const tab = document.getElementById('tab-atrasadas');
+  const allAtrasados = DB.filter(r=>getStatus(r)==='atrasado').length;
+  tab.innerHTML = `⚠️ Em Atraso${allAtrasados>0?`<span class="alert-badge">${allAtrasados}</span>`:''}`;
+
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Total de NFs</div><div class="kpi-value">${total}</div><div class="kpi-sub">no filtro atual</div></div>
+    <div class="kpi green"><div class="kpi-label">Entregues</div><div class="kpi-value" style="color:var(--green)">${entregues}</div><div class="kpi-sub">${total>0?Math.round(entregues/total*100):0}% do total</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Em Trânsito</div><div class="kpi-value" style="color:var(--yellow)">${transito}</div><div class="kpi-sub">aguardando entrega</div></div>
+    <div class="kpi red"><div class="kpi-label">Atrasadas</div><div class="kpi-value" style="color:var(--red)">${atrasados}</div><div class="kpi-sub">prazo vencido</div></div>
+    <div class="kpi orange"><div class="kpi-label">No Limite</div><div class="kpi-value" style="color:var(--orange)">${alertas}</div><div class="kpi-sub">entrega hoje/amanhã</div></div>
+    <div class="kpi"><div class="kpi-label">Frete Total</div><div class="kpi-value" style="font-size:22px">${fmtBRL(freteTotal)}</div><div class="kpi-sub">no filtro atual</div></div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════
+//  BUILD MAIN TABLE
+// ═══════════════════════════════════════════════════
+function buildMain() {
+  const data = getFiltered();
+  const total = data.length;
+  document.getElementById('table-count-all').textContent = `${total} registro${total!==1?'s':''}`;
+  const page = currentPage.all;
+  const slice = data.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+
+  const tbody = document.getElementById('tbody-main');
+  tbody.innerHTML = slice.map((r,i) => {
+    const realIdx = DB.indexOf(r);
+    const st = getStatus(r);
+    const prog = getProgresso(r);
+    const fillColor = st==='entregue'?'var(--green)':st==='atrasado'?'var(--red)':st==='alerta'?'var(--orange)':'var(--accent)';
+    return `<tr>
+      <td class="mono">${r.pedido}</td>
+      <td class="mono" style="font-weight:600;color:var(--accent)">${r.nf}</td>
+      <td>${r.transportadora||'—'}</td>
+      <td>${fmtDate(r.dt_venda)}</td>
+      <td>${fmtDate(r.dt_envio)}</td>
+      <td>${fmtDate(r.dt_entrega)}</td>
+      <td class="mono">${r.prazo||'—'}</td>
+      <td>${BADGE[st]}</td>
+      <td style="min-width:120px">
+        <div class="timer-bar"><div class="timer-fill" style="width:${prog.pct}%;background:${fillColor}"></div></div>
+        <div class="progress-text">${prog.label}</div>
+      </td>
+      <td class="mono">${fmtBRL(r.frete)}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          ${st!=='entregue'?`<button class="btn btn-success btn-sm" onclick="openEntregaModal(${realIdx})">✔</button>`:''}
+          ${st==='transito'||st==='alerta'?`<button class="btn btn-danger btn-sm" onclick="markAtrasado(${realIdx})">⚠</button>`:''}
+          <button class="btn btn-outline btn-sm" onclick="openEditModal(${realIdx})">✏</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  buildPagination('pag-main', total, page, p=>{currentPage.all=p;buildMain();});
+}
+
+// ═══════════════════════════════════════════════════
+//  BUILD ATRASADAS TABLE
+// ═══════════════════════════════════════════════════
+function buildAtrasadas() {
+  const data = DB.filter(r=>getStatus(r)==='atrasado'||getStatus(r)==='alerta');
+  data.sort((a,b)=>getDiasAtraso(b)-getDiasAtraso(a));
+  const total = data.length;
+  document.getElementById('table-count-atrasadas').textContent = `${total} registro${total!==1?'s':''}`;
+
+  const aAtrasadas = data.filter(r=>getStatus(r)==='atrasado');
+  const aAlertas = data.filter(r=>getStatus(r)==='alerta');
+  document.getElementById('kpi-atrasadas').innerHTML = `
+    <div class="kpi red"><div class="kpi-label">Com Atraso</div><div class="kpi-value" style="color:var(--red)">${aAtrasadas.length}</div></div>
+    <div class="kpi orange"><div class="kpi-label">No Limite Hoje</div><div class="kpi-value" style="color:var(--orange)">${aAlertas.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Frete em Risco</div><div class="kpi-value" style="font-size:18px">${fmtBRL(data.reduce((s,r)=>s+(r.frete||0),0))}</div></div>
+  `;
+
+  const page = currentPage.atrasadas;
+  const slice = data.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  document.getElementById('tbody-atrasadas').innerHTML = slice.map(r => {
+    const realIdx = DB.indexOf(r);
+    const atraso = getDiasAtraso(r);
+    const st = getStatus(r);
+    const envio = r.dt_envio ? new Date(r.dt_envio) : null;
+    const prazo = r.prazo || 7;
+    let previsao = '—';
+    if (envio) {
+      const d = new Date(envio); d.setDate(d.getDate()+prazo);
+      previsao = fmtDate(d.toISOString().slice(0,10));
+    }
+    return `<tr>
+      <td class="mono">${r.pedido}</td>
+      <td class="mono" style="font-weight:600;color:var(--red)">${r.nf}</td>
+      <td>${r.transportadora||'—'}</td>
+      <td>${fmtDate(r.dt_envio)}</td>
+      <td>${previsao}</td>
+      <td class="mono" style="color:var(--red);font-weight:700">${atraso>0?`+${atraso} dias`:'Hoje'}</td>
+      <td class="mono">${fmtBRL(r.frete)}</td>
+      <td style="max-width:200px;font-size:12px;color:var(--muted)">${r.obs||'—'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-success btn-sm" onclick="openEntregaModal(${realIdx})">✔ Entregue</button>
+          <button class="btn btn-outline btn-sm" onclick="openEditModal(${realIdx})">✏</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  buildPagination('pag-atrasadas', total, page, p=>{currentPage.atrasadas=p;buildAtrasadas();});
+}
+
+// ═══════════════════════════════════════════════════
+//  BUILD ENTREGUES TABLE
+// ═══════════════════════════════════════════════════
+function buildEntregues() {
+  const data = DB.filter(r=>getStatus(r)==='entregue');
+  data.sort((a,b)=> (b.dt_entrega||'') > (a.dt_entrega||'') ? 1 : -1);
+  const total = data.length;
+  document.getElementById('table-count-entregues').textContent = `${total} registro${total!==1?'s':''}`;
+
+  const page = currentPage.entregues;
+  const slice = data.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  document.getElementById('tbody-entregues').innerHTML = slice.map(r => {
+    return `<tr>
+      <td class="mono">${r.pedido}</td>
+      <td class="mono" style="font-weight:600;color:var(--green)">${r.nf}</td>
+      <td>${r.transportadora||'—'}</td>
+      <td>${fmtDate(r.dt_envio)}</td>
+      <td>${fmtDate(r.dt_entrega)}</td>
+      <td class="mono">${r.dias_transporte!=null?r.dias_transporte+'d':'—'}</td>
+      <td class="mono">${fmtBRL(r.frete)}</td>
+    </tr>`;
+  }).join('');
+
+  buildPagination('pag-entregues', total, page, p=>{currentPage.entregues=p;buildEntregues();});
+}
+
+// ═══════════════════════════════════════════════════
+//  BUILD REPORT
+// ═══════════════════════════════════════════════════
+function buildReport() {
+  const mes = document.getElementById('flt-rel-mes').value;
+  const data = mes ? DB.filter(r=>r.mes===mes) : DB;
+  const transportadoras = [...new Set(data.map(r=>r.transportadora).filter(Boolean))].sort();
+
+  const grid = document.getElementById('report-grid');
+  grid.innerHTML = transportadoras.map(t => {
+    const nfs = data.filter(r=>r.transportadora===t);
+    const entregues = nfs.filter(r=>r.dt_entrega && r.dias_transporte);
+    const avgTransp = entregues.length>0 ? (entregues.reduce((s,r)=>s+r.dias_transporte,0)/entregues.length).toFixed(1) : '—';
+    const allDias = nfs.filter(r=>r.total!=null);
+    const avgTotal = allDias.length>0 ? (allDias.reduce((s,r)=>s+r.total,0)/allDias.length).toFixed(1) : '—';
+    const avgFrete = nfs.filter(r=>r.frete!=null);
+    const avgF = avgFrete.length>0 ? (avgFrete.reduce((s,r)=>s+r.frete,0)/avgFrete.length).toFixed(2) : '—';
+    const atrasadas = nfs.filter(r=>getStatus(r)==='atrasado').length;
+    return `<div class="carrier-card" onclick="showCarrierDetail('${t}')">
+      <div class="carrier-name">${t}</div>
+      <div class="carrier-stats">
+        <div class="stat"><div class="stat-label">Total de NFs</div><div class="stat-value">${nfs.length}</div></div>
+        <div class="stat"><div class="stat-label">Em Atraso</div><div class="stat-value" style="color:var(--red)">${atrasadas}</div></div>
+        <div class="stat"><div class="stat-label">Média Transporte</div><div class="stat-value">${avgTransp}d</div></div>
+        <div class="stat"><div class="stat-label">Média Total (dias)</div><div class="stat-value">${avgTotal}d</div></div>
+        <div class="stat" style="grid-column:1/-1"><div class="stat-label">Frete Médio</div><div class="stat-value" style="font-size:18px">${avgF==='—'?'—':'R$ '+Number(avgF).toFixed(2).replace('.',',')}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showCarrierDetail(carrier) {
+  const mes = document.getElementById('flt-rel-mes').value;
+  const data = (mes ? DB.filter(r=>r.mes===mes) : DB).filter(r=>r.transportadora===carrier);
+  document.getElementById('rpt-carrier-name').textContent = carrier;
+  document.getElementById('rpt-period').textContent = mes||'Todos os meses';
+  document.getElementById('tbody-rpt-detail').innerHTML = data.map(r=>{
+    const st = getStatus(r);
+    return `<tr>
+      <td class="mono">${r.pedido}</td>
+      <td class="mono">${r.nf}</td>
+      <td>${fmtDate(r.dt_envio)}</td>
+      <td>${fmtDate(r.dt_entrega)}</td>
+      <td class="mono">${r.dias_transporte!=null?r.dias_transporte+'d':'—'}</td>
+      <td class="mono">${fmtBRL(r.frete)}</td>
+      <td>${BADGE[st]}</td>
+    </tr>`;
+  }).join('');
+  const detail = document.getElementById('report-detail');
+  detail.classList.add('open');
+  detail.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ═══════════════════════════════════════════════════
+//  PAGINATION
+// ═══════════════════════════════════════════════════
+function buildPagination(containerId, total, current, onPage) {
+  const pages = Math.ceil(total / PAGE_SIZE);
+  if (pages <= 1) { document.getElementById(containerId).innerHTML=''; return; }
+  let html = `<span class="page-info">${((current-1)*PAGE_SIZE)+1}–${Math.min(current*PAGE_SIZE,total)} de ${total}</span>`;
+  html += `<button class="page-btn" ${current===1?'disabled':''} onclick="(${onPage})(${current-1})">‹</button>`;
+  for (let p=Math.max(1,current-2);p<=Math.min(pages,current+2);p++) {
+    html += `<button class="page-btn ${p===current?'active':''}" onclick="(${onPage})(${p})">${p}</button>`;
+  }
+  html += `<button class="page-btn" ${current===pages?'disabled':''} onclick="(${onPage})(${current+1})">›</button>`;
+  document.getElementById(containerId).innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════
+//  MODAL: ADD / EDIT
+// ═══════════════════════════════════════════════════
+document.getElementById('inp-transp').addEventListener('change', function() {
+  document.getElementById('grp-nova-transp').style.display = this.value==='__nova__' ? 'flex' : 'none';
+});
+
+function openAddModal() {
+  editingIdx = null;
+  document.getElementById('modal-title').textContent = 'Nova Nota Fiscal';
+  ['inp-pedido','inp-nf','inp-obs','inp-nova-transp'].forEach(id=>document.getElementById(id).value='');
+  ['inp-venda','inp-envio','inp-entrega'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('inp-prazo').value = 7;
+  document.getElementById('inp-transp').value = '';
+  document.getElementById('inp-frete').value = '';
+  document.getElementById('grp-nova-transp').style.display='none';
+  document.getElementById('modal-nf').classList.add('open');
+}
+
+function openEditModal(idx) {
+  editingIdx = idx;
+  const r = DB[idx];
+  document.getElementById('modal-title').textContent = `Editar NF ${r.nf}`;
+  document.getElementById('inp-pedido').value = r.pedido;
+  document.getElementById('inp-nf').value = r.nf;
+  document.getElementById('inp-venda').value = r.dt_venda||'';
+  document.getElementById('inp-envio').value = r.dt_envio||'';
+  document.getElementById('inp-entrega').value = r.dt_entrega||'';
+  document.getElementById('inp-prazo').value = r.prazo||7;
+  document.getElementById('inp-frete').value = r.frete||'';
+  document.getElementById('inp-obs').value = r.obs||'';
+  const transp = r.transportadora;
+  const sel = document.getElementById('inp-transp');
+  if ([...sel.options].some(o=>o.value===transp)) sel.value = transp;
+  else { sel.value='__nova__'; document.getElementById('inp-nova-transp').value=transp; document.getElementById('grp-nova-transp').style.display='flex'; }
+  document.getElementById('modal-nf').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal-nf').classList.remove('open'); }
+
+function saveNF() {
+  const pedido = document.getElementById('inp-pedido').value.trim();
+  const nf = document.getElementById('inp-nf').value.trim();
+  if (!pedido||!nf) { alert('Pedido e NF são obrigatórios.'); return; }
+  let transp = document.getElementById('inp-transp').value;
+  if (transp==='__nova__') transp = document.getElementById('inp-nova-transp').value.trim().toUpperCase();
+
+  const obj = {
+    pedido, nf,
+    dt_venda: document.getElementById('inp-venda').value||null,
+    dt_envio: document.getElementById('inp-envio').value||null,
+    dt_entrega: document.getElementById('inp-entrega').value||null,
+    dias_faturar: null, dias_transporte: null, total: null,
+    transportadora: transp,
+    frete: parseFloat(document.getElementById('inp-frete').value)||null,
+    prazo: parseInt(document.getElementById('inp-prazo').value)||7,
+    obs: document.getElementById('inp-obs').value.trim(),
+    mes: 'Manual',
+    status_manual: null,
+  };
+
+  // Calc dias_transporte if both dates present
+  if (obj.dt_envio && obj.dt_entrega) {
+    const d1 = new Date(obj.dt_envio), d2 = new Date(obj.dt_entrega);
+    obj.dias_transporte = Math.ceil((d2-d1)/86400000);
+  }
+
+  if (editingIdx !== null) DB[editingIdx] = {...DB[editingIdx], ...obj};
+  else DB.push(obj);
+
+  saveData(DB);
+  closeModal();
+  buildAll();
+}
+
+// ═══════════════════════════════════════════════════
+//  MODAL: ENTREGA
+// ═══════════════════════════════════════════════════
+function openEntregaModal(idx) {
+  entregaIdx = idx;
+  const r = DB[idx];
+  document.getElementById('entrega-nf').textContent = r.nf;
+  document.getElementById('entrega-pedido').textContent = r.pedido;
+  document.getElementById('inp-dt-entrega-real').value = new Date().toISOString().slice(0,10);
+  document.getElementById('inp-entrega-obs').value = '';
+  document.getElementById('modal-entrega').classList.add('open');
+}
+
+function closeModal2() { document.getElementById('modal-entrega').classList.remove('open'); }
+
+function confirmEntrega() {
+  const dt = document.getElementById('inp-dt-entrega-real').value;
+  if (!dt) { alert('Informe a data de entrega.'); return; }
+  const r = DB[entregaIdx];
+  r.dt_entrega = dt;
+  r.status_manual = 'entregue';
+  r.obs = document.getElementById('inp-entrega-obs').value.trim() || r.obs;
+  if (r.dt_envio) {
+    const d1=new Date(r.dt_envio), d2=new Date(dt);
+    r.dias_transporte = Math.ceil((d2-d1)/86400000);
+  }
+  saveData(DB);
+  closeModal2();
+  buildAll();
+}
+
+// ═══════════════════════════════════════════════════
+//  MARK ATRASADO
+// ═══════════════════════════════════════════════════
+function markAtrasado(idx) {
+  DB[idx].status_manual = 'atrasado';
+  saveData(DB);
+  buildAll();
+}
+
+// ═══════════════════════════════════════════════════
+//  SECTION SWITCHING
+// ═══════════════════════════════════════════════════
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sec-'+name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if(name==='atrasadas') buildAtrasadas();
+  if(name==='entregues') buildEntregues();
+  if(name==='relatorio') buildReport();
+}
+
+// ═══════════════════════════════════════════════════
+//  BUILD ALL
+// ═══════════════════════════════════════════════════
+function buildAll() {
+  buildKPIs();
+  buildMain();
+  buildAtrasadas();
+  buildEntregues();
+  buildReport();
+}
+
+// ═══════════════════════════════════════════════════
+//  CLOSE MODAL ON OVERLAY CLICK
+// ═══════════════════════════════════════════════════
+document.getElementById('modal-nf').addEventListener('click', e=>{if(e.target===e.currentTarget)closeModal();});
+document.getElementById('modal-entrega').addEventListener('click', e=>{if(e.target===e.currentTarget)closeModal2();});
+
+// ═══════════════════════════════════════════════════
+//  START
+// ═══════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
