@@ -447,8 +447,8 @@ async function init() {
   if (stored && stored.length > 0) {
     DB = stored;
   } else {
-    const resp = await fetch('data.json');
-    const raw = await resp.json();
+    const resp = await fetch('https://script.google.com/macros/s/AKfycbwGyUnHUMXZgxVsCJfwQHEzIujiAZ3imTZ8tmfIf7Gs_lTyFf9hVRojy877YFdCxPFXyw/exec');
+const raw = await resp.json();
     DB = raw.map(r => ({
       ...r,
       prazo: r.dias_transporte || 7,
