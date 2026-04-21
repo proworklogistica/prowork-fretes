@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PROWORK · Monitor de Fretes</title>
+<link rel="icon" type="image/png" href="LOGO_PROWORK.png">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
   --bg: #0a0d12;
@@ -148,7 +150,24 @@ select option{background:var(--surface2)}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
-/* ── PRINT ── */
+/* ── MÉDIAS TABLE ── */
+.tbl tr.medias-total td{background:rgba(255,184,0,.12);color:var(--yellow);font-weight:700;border-top:2px solid rgba(255,184,0,.4)}
+.tbl tr.medias-total td:first-child{color:var(--yellow)}
+
+/* ── IMPORT MODAL ── */
+.import-drop{border:2px dashed var(--border);border-radius:8px;padding:32px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:16px}
+.import-drop:hover,.import-drop.dragover{border-color:var(--accent);background:rgba(0,200,255,.04)}
+.import-drop-icon{font-size:32px;margin-bottom:10px}
+.import-drop-text{color:var(--muted);font-size:13px}
+.import-drop-text strong{color:var(--accent);cursor:pointer}
+.import-preview{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;max-height:200px;overflow-y:auto;margin-bottom:14px;font-size:12px}
+.import-row-ok{color:var(--green)}
+.import-row-dup{color:var(--yellow)}
+.import-row-err{color:var(--red)}
+.import-summary{display:flex;gap:16px;margin-bottom:14px;font-family:var(--font-mono);font-size:12px}
+.import-stat{display:flex;flex-direction:column;gap:2px}
+.import-stat span:first-child{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px}
+
 @media print{
   header,.nav-tabs,.filters,.pagination,.btn,button:not(.print-keep){display:none!important}
   body{background:#fff;color:#000}
@@ -170,8 +189,11 @@ select option{background:var(--surface2)}
 <div class="nav-tabs">
   <button class="tab-btn active" onclick="showSection('monitoramento')">📦 Monitoramento</button>
   <button class="tab-btn" onclick="showSection('atrasadas')" id="tab-atrasadas">⚠️ Em Atraso</button>
+  <button class="tab-btn" onclick="showSection('transito')" id="tab-transito">🚚 Em Trânsito</button>
   <button class="tab-btn" onclick="showSection('entregues')">✅ Entregues</button>
   <button class="tab-btn" onclick="showSection('relatorio')">📊 Relatório por Transportadora</button>
+  <button class="tab-btn" onclick="showSection('rel-mensal')">📅 Relatório Mensal</button>
+  <button class="tab-btn" onclick="showSection('rel-atrasos')">🚨 Relatório de Atrasos</button>
 </div>
 
 <main>
@@ -191,10 +213,6 @@ select option{background:var(--surface2)}
       <span class="filter-label">Mês</span>
       <select id="flt-mes" onchange="applyFilters()">
         <option value="">Todos</option>
-        <option>Janeiro</option>
-        <option>Fevereiro</option>
-        <option>Março</option>
-        <option>Abril</option>
       </select>
     </div>
     <div class="filter-group">
@@ -211,7 +229,8 @@ select option{background:var(--surface2)}
       <span class="filter-label">Buscar NF / Pedido</span>
       <input type="text" id="flt-busca" placeholder="NF ou nº pedido..." oninput="applyFilters()">
     </div>
-    <div class="filter-group" style="justify-content:flex-end;margin-left:auto;margin-top:16px">
+    <div class="filter-group" style="justify-content:flex-end;margin-left:auto;margin-top:16px;flex-direction:row;gap:8px">
+      <button class="btn btn-outline" onclick="openImportModal()">📂 Importar Excel</button>
       <button class="btn btn-primary" onclick="openAddModal()">+ Nova NF</button>
     </div>
   </div>
@@ -241,6 +260,22 @@ select option{background:var(--surface2)}
 <!-- ═══ SECTION: ATRASADAS ═══ -->
 <div class="section" id="sec-atrasadas">
   <div class="kpi-grid" id="kpi-atrasadas"></div>
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Transportadora</span>
+      <select id="flt-atraso-transp" onchange="buildAtrasadas()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Buscar Pedido / NF</span>
+      <input type="text" id="flt-atraso-busca" placeholder="Pedido ou NF..." oninput="buildAtrasadas()" style="width:200px">
+    </div>
+    <div style="margin-left:auto;margin-top:16px;display:flex;gap:8px">
+      <button class="btn btn-outline" onclick="exportAtrasadosPDF()">🖨️ Imprimir / PDF</button>
+      <button class="btn btn-outline" onclick="exportAtrasadosExcel()">📥 Exportar Excel</button>
+    </div>
+  </div>
   <div class="table-wrap">
     <div class="table-header">
       <span class="table-title" style="color:var(--red)">⚠ Notas em Atraso</span>
@@ -262,8 +297,75 @@ select option{background:var(--surface2)}
   </div>
 </div>
 
+<!-- ═══ SECTION: TRÂNSITO ═══ -->
+<div class="section" id="sec-transito">
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Transportadora</span>
+      <select id="flt-transito-transp" onchange="buildTransito()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Mês de Embarque</span>
+      <select id="flt-transito-mes" onchange="buildTransito()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Ordenar por</span>
+      <select id="flt-transito-ordem" onchange="buildTransito()">
+        <option value="embarque_asc">Embarque mais antigo</option>
+        <option value="embarque_desc">Embarque mais recente</option>
+        <option value="prazo_asc">Prazo mais urgente</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Buscar Pedido / NF</span>
+      <input type="text" id="flt-transito-busca" placeholder="Pedido ou NF..." oninput="buildTransito()" style="width:200px">
+    </div>
+  </div>
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title" style="color:var(--yellow)">🚚 Pedidos em Trânsito</span>
+      <span class="table-count" id="table-count-transito">— registros</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tbl-transito">
+        <thead>
+          <tr>
+            <th>Pedido</th><th>NF</th><th>Transportadora</th>
+            <th>Dt Embarque</th><th>Prazo (dias)</th><th>Previsão Entrega</th>
+            <th>Progresso</th><th>Frete (R$)</th><th>Status</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-transito"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pag-transito"></div>
+  </div>
+</div>
+
 <!-- ═══ SECTION: ENTREGUES ═══ -->
 <div class="section" id="sec-entregues">
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Transportadora</span>
+      <select id="flt-entregues-transp" onchange="buildEntregues()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Mês de Embarque</span>
+      <select id="flt-entregues-mes" onchange="buildEntregues()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Buscar Pedido / NF</span>
+      <input type="text" id="flt-entregues-busca" placeholder="Pedido ou NF..." oninput="buildEntregues()" style="width:200px">
+    </div>
+  </div>
   <div class="table-wrap">
     <div class="table-header">
       <span class="table-title" style="color:var(--green)">✔ Notas Entregues</span>
@@ -292,8 +394,6 @@ select option{background:var(--surface2)}
       <span class="filter-label">Filtrar Mês</span>
       <select id="flt-rel-mes" onchange="buildReport()">
         <option value="">Todos os meses</option>
-        <option>Janeiro</option><option>Fevereiro</option>
-        <option>Março</option><option>Abril</option>
       </select>
     </div>
     <div style="margin-left:auto;margin-top:16px">
@@ -315,6 +415,105 @@ select option{background:var(--surface2)}
           </tr>
         </thead>
         <tbody id="tbody-rpt-detail"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<!-- ═══ SECTION: RELATÓRIO MENSAL ═══ -->
+<div class="section" id="sec-rel-mensal">
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Mês</span>
+      <select id="flt-relmensal-mes" onchange="buildRelMensal()">
+        <option value="">Selecione um mês...</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Transportadora</span>
+      <select id="flt-relmensal-transp" onchange="buildRelMensal()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div style="margin-left:auto;margin-top:16px;display:flex;gap:8px">
+      <button class="btn btn-outline" onclick="exportMensalPDF()">🖨️ Imprimir / PDF</button>
+      <button class="btn btn-outline" onclick="exportMensalExcel()">📥 Exportar Excel</button>
+    </div>
+  </div>
+  <div id="relmensal-kpis" style="margin-bottom:20px"></div>
+
+  <!-- Relatório de Médias por Transportadora -->
+  <div class="table-wrap" id="relmensal-medias-wrap" style="margin-bottom:24px">
+    <div class="table-header">
+      <span class="table-title">📊 Relatório de Médias por Transportadora</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tbl-relmensal-medias">
+        <thead>
+          <tr>
+            <th>Transportadora</th><th>Total de NFs</th><th>Dias de Transporte</th><th>Dias p/ Entrega (Venda→Entrega)</th><th>R$ Frete Médio</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-relmensal-medias"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title" id="relmensal-title">📅 Embarques do Mês</span>
+      <span class="table-count" id="table-count-relmensal">— registros</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tbl-relmensal">
+        <thead>
+          <tr>
+            <th>Pedido</th><th>NF</th><th>Transportadora</th>
+            <th>Dt Venda</th><th>Dt Embarque</th><th>Dt Entrega</th>
+            <th>Dias Transporte</th><th>Prazo</th><th>Frete (R$)</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-relmensal"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SECTION: RELATÓRIO DE ATRASOS ═══ -->
+<div class="section" id="sec-rel-atrasos">
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Transportadora</span>
+      <select id="flt-relatrasos-transp" onchange="buildRelAtrasos()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Mês</span>
+      <select id="flt-relatrasos-mes" onchange="buildRelAtrasos()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div style="margin-left:auto;margin-top:16px;display:flex;gap:8px">
+      <button class="btn btn-outline" onclick="exportAtrasosPDF()">🖨️ Imprimir / PDF</button>
+      <button class="btn btn-outline" onclick="exportAtrasosExcel()">📥 Exportar Excel</button>
+    </div>
+  </div>
+  <div id="relatrasos-kpis" style="margin-bottom:20px"></div>
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title" style="color:var(--red)">🚨 Pedidos em Atraso — Relatório Completo</span>
+      <span class="table-count" id="table-count-relatrasos">— registros</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tbl-relatrasos">
+        <thead>
+          <tr>
+            <th>Pedido</th><th>NF</th><th>Transportadora</th>
+            <th>Dt Embarque</th><th>Previsão Entrega</th><th>Dt Entrega Real</th>
+            <th>Dias em Atraso</th><th>Status</th><th>Frete (R$)</th><th>Observação</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-relatrasos"></tbody>
       </table>
     </div>
   </div>
@@ -410,6 +609,40 @@ select option{background:var(--surface2)}
   </div>
 </div>
 
+<!-- ═══ MODAL: IMPORTAR EXCEL ═══ -->
+<div class="modal-overlay" id="modal-import">
+  <div class="modal" style="width:640px">
+    <div class="modal-title">📂 Importar Fretes — Excel</div>
+    <button class="modal-close" onclick="closeImportModal()">✕</button>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:16px">
+      O arquivo deve conter as colunas: <strong style="color:var(--accent)">Pedido, NF, Transportadora, Dt Venda, Dt Embarque, Dt Entrega, Dias Transporte, Prazo, Frete (R$), Status</strong>
+    </p>
+
+    <div class="import-drop" id="import-drop" onclick="document.getElementById('import-file-input').click()">
+      <div class="import-drop-icon">📄</div>
+      <div class="import-drop-text">Arraste o arquivo .xlsx aqui ou <strong>clique para selecionar</strong></div>
+      <div id="import-filename" style="margin-top:8px;font-size:12px;color:var(--accent)"></div>
+    </div>
+    <input type="file" id="import-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleImportFile(this)">
+
+    <div id="import-preview-area" style="display:none">
+      <div class="import-summary" id="import-summary"></div>
+      <div class="import-preview" id="import-preview"></div>
+      <div id="import-dup-warning" style="display:none;background:rgba(255,184,0,.1);border:1px solid rgba(255,184,0,.3);border-radius:6px;padding:10px;font-size:12px;color:var(--yellow);margin-bottom:14px">
+        ⚠️ Registros duplicados (mesmo Pedido+NF já existem) serão <strong>ignorados</strong> por padrão. Marque abaixo para substituir.
+        <br><label style="margin-top:8px;display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="import-overwrite"> <span>Substituir registros duplicados</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeImportModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirmar-import" style="display:none" onclick="confirmImport()">✔ Importar Registros</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════
 //  DATA LAYER
@@ -451,18 +684,40 @@ async function init() {
 const raw = await resp.json();
     DB = raw.map(r => ({
       ...r,
-      prazo: r.dias_transporte || 7,
+      transportadora: r.transportadora ? r.transportadora.trim().toUpperCase() : '',
+      prazo: 7,  // prazo padrão de entrega em dias a partir do embarque
       obs: '',
-      status_manual: null, // null = auto
+      status_manual: null,
     }));
     saveData(DB);
   }
 
-  // Populate transportadora filter
-  const transportadoras = [...new Set(DB.map(r=>r.transportadora).filter(Boolean))].sort();
-  const sel = document.getElementById('flt-transportadora');
-  transportadoras.forEach(t => {
-    const o = document.createElement('option'); o.value=o.textContent=t; sel.appendChild(o);
+  // Normalize transportadora field (trim whitespace, uppercase) on every record
+  DB.forEach(r => { if (r.transportadora) r.transportadora = r.transportadora.trim().toUpperCase(); });
+
+  // Populate transportadora filter with all unique values from DB
+  const transportadoras = [...new Set(DB.map(r=>r.transportadora).filter(t=>t&&t.length>0))].sort();
+  ['flt-transportadora','flt-atraso-transp','flt-transito-transp','flt-entregues-transp','flt-relmensal-transp','flt-relatrasos-transp'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    while (sel.options.length > 1) sel.remove(1);
+    transportadoras.forEach(t => {
+      const o = document.createElement('option'); o.value=o.textContent=t; sel.appendChild(o);
+    });
+  });
+
+  // Populate month filters with all 12 months of the year (fixed)
+  const ALL_MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  ['flt-mes','flt-rel-mes','flt-transito-mes','flt-entregues-mes','flt-relmensal-mes','flt-relatrasos-mes'].forEach(selId => {
+    const s = document.getElementById(selId);
+    if (!s) return;
+    while (s.options.length > 1) s.remove(1);
+    ALL_MONTHS.forEach((m, i) => {
+      const o = document.createElement('option');
+      o.value = String(i + 1).padStart(2, '0');
+      o.textContent = m;
+      s.appendChild(o);
+    });
   });
 
   buildAll();
@@ -495,11 +750,13 @@ function getDiasAtraso(r) {
 }
 
 function getProgresso(r) {
-  const today = new Date(); today.setHours(0,0,0,0);
   if (!r.dt_envio) return {pct:0, label:'—'};
   const envio = new Date(r.dt_envio);
   const prazo = r.prazo || 7;
-  const diasPassados = Math.ceil((today - envio) / 86400000);
+  // Se já entregue, usa dt_entrega como referência; senão usa hoje
+  const ref = r.dt_entrega ? new Date(r.dt_entrega) : new Date();
+  ref.setHours(0,0,0,0);
+  const diasPassados = Math.max(0, Math.ceil((ref - envio) / 86400000));
   const pct = Math.min(100, Math.round((diasPassados / prazo) * 100));
   return {pct, label: `${diasPassados}/${prazo} dias`};
 }
@@ -524,8 +781,15 @@ function fmtBRL(v) {
 // ═══════════════════════════════════════════════════
 //  FILTERS
 // ═══════════════════════════════════════════════════
-let currentPage = {all:1, atrasadas:1, entregues:1};
+let currentPage = {all:1, atrasadas:1, transito:1, entregues:1};
 const PAGE_SIZE = 50;
+
+function getRecordMonth(r) {
+  // Returns "01".."12" based on dt_envio or dt_venda
+  const d = r.dt_envio || r.dt_venda;
+  if (!d) return null;
+  return d.slice(5, 7); // "YYYY-MM-DD" -> "MM"
+}
 
 function getFiltered() {
   const transp = document.getElementById('flt-transportadora').value;
@@ -534,7 +798,7 @@ function getFiltered() {
   const busca = document.getElementById('flt-busca').value.toLowerCase();
   return DB.filter(r => {
     if (transp && r.transportadora !== transp) return false;
-    if (mes && r.mes !== mes) return false;
+    if (mes && getRecordMonth(r) !== mes) return false;
     if (status && getStatus(r) !== status) return false;
     if (busca && !r.nf.includes(busca) && !r.pedido.toLowerCase().includes(busca)) return false;
     return true;
@@ -609,6 +873,7 @@ function buildMain() {
           ${st!=='entregue'?`<button class="btn btn-success btn-sm" onclick="openEntregaModal(${realIdx})">✔</button>`:''}
           ${st==='transito'||st==='alerta'?`<button class="btn btn-danger btn-sm" onclick="markAtrasado(${realIdx})">⚠</button>`:''}
           <button class="btn btn-outline btn-sm" onclick="openEditModal(${realIdx})">✏</button>
+          <button class="btn btn-sm" style="background:rgba(255,61,90,.15);color:var(--red);border:1px solid rgba(255,61,90,.3)" onclick="deleteNF(${realIdx})" title="Excluir">🗑</button>
         </div>
       </td>
     </tr>`;
@@ -621,7 +886,11 @@ function buildMain() {
 //  BUILD ATRASADAS TABLE
 // ═══════════════════════════════════════════════════
 function buildAtrasadas() {
-  const data = DB.filter(r=>getStatus(r)==='atrasado'||getStatus(r)==='alerta');
+  const filterTransp = document.getElementById('flt-atraso-transp') ? document.getElementById('flt-atraso-transp').value : '';
+  const busca = (document.getElementById('flt-atraso-busca') ? document.getElementById('flt-atraso-busca').value : '').toLowerCase();
+  let data = DB.filter(r=>getStatus(r)==='atrasado'||getStatus(r)==='alerta');
+  if (filterTransp) data = data.filter(r=>r.transportadora===filterTransp);
+  if (busca) data = data.filter(r=>r.nf.toLowerCase().includes(busca)||r.pedido.toString().toLowerCase().includes(busca));
   data.sort((a,b)=>getDiasAtraso(b)-getDiasAtraso(a));
   const total = data.length;
   document.getElementById('table-count-atrasadas').textContent = `${total} registro${total!==1?'s':''}`;
@@ -660,6 +929,7 @@ function buildAtrasadas() {
         <div style="display:flex;gap:6px">
           <button class="btn btn-success btn-sm" onclick="openEntregaModal(${realIdx})">✔ Entregue</button>
           <button class="btn btn-outline btn-sm" onclick="openEditModal(${realIdx})">✏</button>
+          <button class="btn btn-sm" style="background:rgba(255,61,90,.15);color:var(--red);border:1px solid rgba(255,61,90,.3)" onclick="deleteNF(${realIdx})" title="Excluir">🗑</button>
         </div>
       </td>
     </tr>`;
@@ -672,7 +942,13 @@ function buildAtrasadas() {
 //  BUILD ENTREGUES TABLE
 // ═══════════════════════════════════════════════════
 function buildEntregues() {
-  const data = DB.filter(r=>getStatus(r)==='entregue');
+  const filterTransp = document.getElementById('flt-entregues-transp') ? document.getElementById('flt-entregues-transp').value : '';
+  const filterMes = document.getElementById('flt-entregues-mes') ? document.getElementById('flt-entregues-mes').value : '';
+  const busca = (document.getElementById('flt-entregues-busca') ? document.getElementById('flt-entregues-busca').value : '').toLowerCase();
+  let data = DB.filter(r=>getStatus(r)==='entregue');
+  if (filterTransp) data = data.filter(r=>r.transportadora===filterTransp);
+  if (filterMes) data = data.filter(r=>getRecordMonth(r)===filterMes);
+  if (busca) data = data.filter(r=>r.nf.toLowerCase().includes(busca)||r.pedido.toString().toLowerCase().includes(busca));
   data.sort((a,b)=> (b.dt_entrega||'') > (a.dt_entrega||'') ? 1 : -1);
   const total = data.length;
   document.getElementById('table-count-entregues').textContent = `${total} registro${total!==1?'s':''}`;
@@ -699,7 +975,8 @@ function buildEntregues() {
 // ═══════════════════════════════════════════════════
 function buildReport() {
   const mes = document.getElementById('flt-rel-mes').value;
-  const data = mes ? DB.filter(r=>r.mes===mes) : DB;
+  const ALL_MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const data = mes ? DB.filter(r => getRecordMonth(r) === mes) : DB;
   const transportadoras = [...new Set(data.map(r=>r.transportadora).filter(Boolean))].sort();
 
   const grid = document.getElementById('report-grid');
@@ -727,9 +1004,11 @@ function buildReport() {
 
 function showCarrierDetail(carrier) {
   const mes = document.getElementById('flt-rel-mes').value;
-  const data = (mes ? DB.filter(r=>r.mes===mes) : DB).filter(r=>r.transportadora===carrier);
+  const ALL_MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const mesLabel = mes ? ALL_MONTHS[parseInt(mes,10)-1] : 'Todos os meses';
+  const data = (mes ? DB.filter(r => getRecordMonth(r) === mes) : DB).filter(r=>r.transportadora===carrier);
   document.getElementById('rpt-carrier-name').textContent = carrier;
-  document.getElementById('rpt-period').textContent = mes||'Todos os meses';
+  document.getElementById('rpt-period').textContent = mesLabel;
   document.getElementById('tbody-rpt-detail').innerHTML = data.map(r=>{
     const st = getStatus(r);
     return `<tr>
@@ -745,6 +1024,390 @@ function showCarrierDetail(carrier) {
   const detail = document.getElementById('report-detail');
   detail.classList.add('open');
   detail.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ═══════════════════════════════════════════════════
+//  BUILD TRÂNSITO TABLE
+// ═══════════════════════════════════════════════════
+function buildTransito() {
+  const filterTransp = document.getElementById('flt-transito-transp') ? document.getElementById('flt-transito-transp').value : '';
+  const filterMes = document.getElementById('flt-transito-mes') ? document.getElementById('flt-transito-mes').value : '';
+  const ordem = document.getElementById('flt-transito-ordem') ? document.getElementById('flt-transito-ordem').value : 'embarque_asc';
+
+  let data = DB.filter(r => {
+    const st = getStatus(r);
+    return st === 'transito' || st === 'alerta';
+  });
+  if (filterTransp) data = data.filter(r=>r.transportadora===filterTransp);
+  if (filterMes) data = data.filter(r=>getRecordMonth(r)===filterMes);
+  const busca = (document.getElementById('flt-transito-busca') ? document.getElementById('flt-transito-busca').value : '').toLowerCase();
+  if (busca) data = data.filter(r=>r.nf.toLowerCase().includes(busca)||r.pedido.toString().toLowerCase().includes(busca));
+
+  if (ordem === 'embarque_asc') data.sort((a,b)=>(a.dt_envio||'') < (b.dt_envio||'') ? -1 : 1);
+  else if (ordem === 'embarque_desc') data.sort((a,b)=>(b.dt_envio||'') > (a.dt_envio||'') ? 1 : -1);
+  else if (ordem === 'prazo_asc') data.sort((a,b)=>getDiasAtraso(b)-getDiasAtraso(a));
+
+  const total = data.length;
+  document.getElementById('table-count-transito').textContent = `${total} registro${total!==1?'s':''}`;
+
+  const page = currentPage.transito || 1;
+  const slice = data.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+
+  document.getElementById('tbody-transito').innerHTML = slice.map(r => {
+    const realIdx = DB.indexOf(r);
+    const st = getStatus(r);
+    const prog = getProgresso(r);
+    const fillColor = st==='alerta'?'var(--orange)':'var(--accent)';
+    const envio = r.dt_envio ? new Date(r.dt_envio) : null;
+    const prazo = r.prazo || 7;
+    let previsao = '—';
+    if (envio) {
+      const d = new Date(envio); d.setDate(d.getDate()+prazo);
+      previsao = fmtDate(d.toISOString().slice(0,10));
+    }
+    return `<tr>
+      <td class="mono">${r.pedido}</td>
+      <td class="mono" style="font-weight:600;color:var(--yellow)">${r.nf}</td>
+      <td>${r.transportadora||'—'}</td>
+      <td>${fmtDate(r.dt_envio)}</td>
+      <td class="mono">${prazo}</td>
+      <td>${previsao}</td>
+      <td style="min-width:120px">
+        <div class="timer-bar"><div class="timer-fill" style="width:${prog.pct}%;background:${fillColor}"></div></div>
+        <div class="progress-text">${prog.label}</div>
+      </td>
+      <td class="mono">${fmtBRL(r.frete)}</td>
+      <td>${BADGE[st]}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-success btn-sm" onclick="openEntregaModal(${realIdx})">✔</button>
+          <button class="btn btn-danger btn-sm" onclick="markAtrasado(${realIdx})">⚠</button>
+          <button class="btn btn-outline btn-sm" onclick="openEditModal(${realIdx})">✏</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  buildPagination('pag-transito', total, page, p=>{currentPage.transito=p;buildTransito();});
+}
+
+// ═══════════════════════════════════════════════════
+//  BUILD RELATÓRIO MENSAL
+// ═══════════════════════════════════════════════════
+function buildRelMensal() {
+  const mes = document.getElementById('flt-relmensal-mes').value;
+  const transp = document.getElementById('flt-relmensal-transp').value;
+  const ALL_MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  let data = mes ? DB.filter(r => getRecordMonth(r) === mes) : DB;
+  if (transp) data = data.filter(r=>r.transportadora===transp);
+  data = [...data].sort((a,b)=>(a.dt_envio||'') < (b.dt_envio||'') ? -1 : 1);
+
+  const mesLabel = mes ? ALL_MONTHS[parseInt(mes,10)-1] : 'Todos os meses';
+  document.getElementById('relmensal-title').textContent = `📅 Embarques — ${mesLabel}${transp ? ' · '+transp : ''}`;
+  document.getElementById('table-count-relmensal').textContent = `${data.length} registro${data.length!==1?'s':''}`;
+
+  const entregues = data.filter(r=>getStatus(r)==='entregue').length;
+  const emAtraso = data.filter(r=>getStatus(r)==='atrasado').length;
+  const transito = data.filter(r=>getStatus(r)==='transito'||getStatus(r)==='alerta').length;
+  const freteTotal = data.reduce((s,r)=>s+(r.frete||0),0);
+
+  document.getElementById('relmensal-kpis').innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Total de Embarques</div><div class="kpi-value">${data.length}</div></div>
+      <div class="kpi green"><div class="kpi-label">Entregues</div><div class="kpi-value" style="color:var(--green)">${entregues}</div></div>
+      <div class="kpi yellow"><div class="kpi-label">Em Trânsito</div><div class="kpi-value" style="color:var(--yellow)">${transito}</div></div>
+      <div class="kpi red"><div class="kpi-label">Em Atraso</div><div class="kpi-value" style="color:var(--red)">${emAtraso}</div></div>
+      <div class="kpi"><div class="kpi-label">Frete Total</div><div class="kpi-value" style="font-size:22px">${fmtBRL(freteTotal)}</div></div>
+    </div>`;
+
+  // ── RELATÓRIO DE MÉDIAS ──
+  const transportadoras = [...new Set(data.map(r=>r.transportadora).filter(Boolean))].sort();
+
+  function calcMedias(rows) {
+    const total = rows.length;
+    // Dias de transporte: embarque → entrega (apenas quem tem dt_entrega)
+    const comTransp = rows.filter(r => r.dt_envio && r.dt_entrega);
+    const mediaDiasTransp = comTransp.length > 0
+      ? comTransp.reduce((s,r) => s + Math.ceil((new Date(r.dt_entrega)-new Date(r.dt_envio))/86400000), 0) / comTransp.length
+      : null;
+    // Dias venda → entrega (apenas quem tem dt_venda e dt_entrega)
+    const comVenda = rows.filter(r => r.dt_venda && r.dt_entrega);
+    const mediaDiasVenda = comVenda.length > 0
+      ? comVenda.reduce((s,r) => s + Math.ceil((new Date(r.dt_entrega)-new Date(r.dt_venda))/86400000), 0) / comVenda.length
+      : null;
+    // Frete médio
+    const comFrete = rows.filter(r => r.frete != null);
+    const mediaFrete = comFrete.length > 0
+      ? comFrete.reduce((s,r) => s + r.frete, 0) / comFrete.length
+      : null;
+    return {total, mediaDiasTransp, mediaDiasVenda, mediaFrete};
+  }
+
+  const fmt1 = v => v != null ? v.toFixed(2).replace('.',',') : '—';
+  const fmtFrete = v => v != null ? 'R$ ' + v.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.') : '—';
+
+  const linhasTransp = transportadoras.map(t => {
+    const rows = data.filter(r=>r.transportadora===t);
+    const m = calcMedias(rows);
+    return `<tr>
+      <td style="font-weight:600">${t}</td>
+      <td class="mono">${m.total}</td>
+      <td class="mono">${fmt1(m.mediaDiasTransp)}</td>
+      <td class="mono">${fmt1(m.mediaDiasVenda)}</td>
+      <td class="mono">${fmtFrete(m.mediaFrete)}</td>
+    </tr>`;
+  }).join('');
+
+  // Linha TOTAL
+  const tot = calcMedias(data);
+  const linhaTotal = `<tr class="medias-total">
+    <td>TOTAL</td>
+    <td class="mono">${tot.total}</td>
+    <td class="mono">${fmt1(tot.mediaDiasTransp)}</td>
+    <td class="mono">${fmt1(tot.mediaDiasVenda)}</td>
+    <td class="mono">${fmtFrete(tot.mediaFrete)}</td>
+  </tr>`;
+
+  document.getElementById('tbody-relmensal-medias').innerHTML = linhasTransp + linhaTotal;
+
+  document.getElementById('tbody-relmensal').innerHTML = data.map(r => {
+    const st = getStatus(r);
+    return `<tr>
+      <td class="mono">${r.pedido}</td>
+      <td class="mono" style="font-weight:600;color:var(--accent)">${r.nf}</td>
+      <td>${r.transportadora||'—'}</td>
+      <td>${fmtDate(r.dt_venda)}</td>
+      <td>${fmtDate(r.dt_envio)}</td>
+      <td>${fmtDate(r.dt_entrega)}</td>
+      <td class="mono">${r.dias_transporte!=null?r.dias_transporte+'d':'—'}</td>
+      <td class="mono">${r.prazo||'—'}</td>
+      <td class="mono">${fmtBRL(r.frete)}</td>
+      <td>${BADGE[st]}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════
+//  BUILD RELATÓRIO DE ATRASOS
+// ═══════════════════════════════════════════════════
+
+// Retorna true se a NF foi entregue fora do prazo
+function wasDeliveredLate(r) {
+  if (getStatus(r) !== 'entregue') return false;
+  if (!r.dt_envio || !r.dt_entrega) return false;
+  const prazo = r.prazo || 7;
+  const diasReais = Math.ceil((new Date(r.dt_entrega) - new Date(r.dt_envio)) / 86400000);
+  return diasReais > prazo;
+}
+
+// Retorna quantos dias atrasou (funciona para em-atraso E entregues com atraso)
+function getDiasAtrasoReal(r) {
+  const st = getStatus(r);
+  if (st === 'entregue') {
+    if (!r.dt_envio || !r.dt_entrega) return 0;
+    const prazo = r.prazo || 7;
+    return Math.max(0, Math.ceil((new Date(r.dt_entrega) - new Date(r.dt_envio)) / 86400000) - prazo);
+  }
+  return getDiasAtraso(r);
+}
+
+function buildRelAtrasos() {
+  const transp = document.getElementById('flt-relatrasos-transp').value;
+  const mes = document.getElementById('flt-relatrasos-mes').value;
+
+  // Inclui: em atraso/alerta (em trânsito) + entregues que passaram do prazo
+  let data = DB.filter(r => {
+    const st = getStatus(r);
+    return st === 'atrasado' || st === 'alerta' || wasDeliveredLate(r);
+  });
+  if (transp) data = data.filter(r=>r.transportadora===transp);
+  if (mes) data = data.filter(r=>getRecordMonth(r)===mes);
+  data.sort((a,b)=>getDiasAtrasoReal(b)-getDiasAtrasoReal(a));
+
+  document.getElementById('table-count-relatrasos').textContent = `${data.length} registro${data.length!==1?'s':''}`;
+  const freteRisco = data.reduce((s,r)=>s+(r.frete||0),0);
+  const maxAtraso = data.length>0 ? getDiasAtrasoReal(data[0]) : 0;
+
+  const emAberto = data.filter(r=>getStatus(r)!=='entregue').length;
+  const entreguesAtrasadas = data.filter(r=>getStatus(r)==='entregue').length;
+
+  document.getElementById('relatrasos-kpis').innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi red"><div class="kpi-label">Total com Atraso</div><div class="kpi-value" style="color:var(--red)">${data.length}</div></div>
+      <div class="kpi orange"><div class="kpi-label">Em Aberto</div><div class="kpi-value" style="color:var(--orange)">${emAberto}</div><div class="kpi-sub">ainda em trânsito</div></div>
+      <div class="kpi yellow"><div class="kpi-label">Entregues c/ Atraso</div><div class="kpi-value" style="color:var(--yellow)">${entreguesAtrasadas}</div><div class="kpi-sub">passou do prazo</div></div>
+      <div class="kpi"><div class="kpi-label">Maior Atraso</div><div class="kpi-value" style="color:var(--orange)">${maxAtraso}d</div></div>
+      <div class="kpi"><div class="kpi-label">Frete Envolvido</div><div class="kpi-value" style="font-size:20px">${fmtBRL(freteRisco)}</div></div>
+    </div>`;
+
+  document.getElementById('tbody-relatrasos').innerHTML = data.map(r => {
+    const st = getStatus(r);
+    const atraso = getDiasAtrasoReal(r);
+    const envio = r.dt_envio ? new Date(r.dt_envio) : null;
+    const prazo = r.prazo || 7;
+    let previsao = '—';
+    if (envio) { const d = new Date(envio); d.setDate(d.getDate()+prazo); previsao = fmtDate(d.toISOString().slice(0,10)); }
+    const atrasoLabel = atraso > 0 ? `+${atraso} dias` : 'Hoje';
+    const atrasoColor = st === 'entregue' ? 'var(--yellow)' : 'var(--red)';
+    return `<tr>
+      <td class="mono">${r.pedido}</td>
+      <td class="mono" style="font-weight:600;color:${atrasoColor}">${r.nf}</td>
+      <td>${r.transportadora||'—'}</td>
+      <td>${fmtDate(r.dt_envio)}</td>
+      <td>${previsao}</td>
+      <td>${fmtDate(r.dt_entrega)}</td>
+      <td class="mono" style="color:${atrasoColor};font-weight:700">${atrasoLabel}</td>
+      <td>${BADGE[st]}</td>
+      <td class="mono">${fmtBRL(r.frete)}</td>
+      <td style="max-width:180px;font-size:12px;color:var(--muted)">${r.obs||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════
+//  EXPORT FUNCTIONS
+// ═══════════════════════════════════════════════════
+function getExportDataMensal() {
+  const mes = document.getElementById('flt-relmensal-mes').value;
+  const transp = document.getElementById('flt-relmensal-transp').value;
+  let data = mes ? DB.filter(r => getRecordMonth(r) === mes) : DB;
+  if (transp) data = data.filter(r=>r.transportadora===transp);
+  return data.sort((a,b)=>(a.dt_envio||'') < (b.dt_envio||'') ? -1 : 1);
+}
+
+function getExportDataAtrasos() {
+  const transp = document.getElementById('flt-relatrasos-transp').value;
+  const mes = document.getElementById('flt-relatrasos-mes').value;
+  let data = DB.filter(r=>getStatus(r)==='atrasado'||getStatus(r)==='alerta');
+  if (transp) data = data.filter(r=>r.transportadora===transp);
+  if (mes) data = data.filter(r=>getRecordMonth(r)===mes);
+  return data.sort((a,b)=>getDiasAtraso(b)-getDiasAtraso(a));
+}
+
+function getExportDataAtrasadasTab() {
+  const filterTransp = document.getElementById('flt-atraso-transp').value;
+  let data = DB.filter(r=>getStatus(r)==='atrasado'||getStatus(r)==='alerta');
+  if (filterTransp) data = data.filter(r=>r.transportadora===filterTransp);
+  return data.sort((a,b)=>getDiasAtraso(b)-getDiasAtraso(a));
+}
+
+function buildPrintWindow(titleText, tableHTML) {
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8">
+    <title>${titleText}</title>
+    <style>
+      body{font-family:Arial,sans-serif;font-size:12px;color:#111;padding:20px}
+      h1{font-size:18px;margin-bottom:4px}
+      p.sub{font-size:11px;color:#666;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse}
+      th{background:#e0e0e0;padding:7px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+      td{padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px}
+      tr:last-child td{border-bottom:none}
+      .badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
+      .b-entregue{background:#d4f5e0;color:#006628}
+      .b-atrasado{background:#fde0e4;color:#b00020}
+      .b-transito{background:#fff3cc;color:#6b4d00}
+      .b-alerta{background:#ffe5cc;color:#7a3200}
+      @media print{button{display:none}}
+    </style>
+  </head><body>
+    <h1>${titleText}</h1>
+    <p class="sub">Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+    <button onclick="window.print()" style="margin-bottom:16px;padding:8px 18px;background:#007bff;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px">🖨️ Imprimir / Salvar PDF</button>
+    ${tableHTML}
+  </body></html>`);
+  w.document.close();
+}
+
+function exportMensalPDF() {
+  const ALL_MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const mes = document.getElementById('flt-relmensal-mes').value;
+  const mesLabel = mes ? ALL_MONTHS[parseInt(mes,10)-1] : 'Todos os meses';
+  const data = getExportDataMensal();
+  const rows = data.map(r=>{
+    const st = getStatus(r);
+    const cls = {entregue:'b-entregue',atrasado:'b-atrasado',transito:'b-transito',alerta:'b-alerta'}[st]||'';
+    const stLabel = {entregue:'Entregue',atrasado:'Atrasado',transito:'Em Trânsito',alerta:'No Limite'}[st]||st;
+    return `<tr><td>${r.pedido}</td><td>${r.nf}</td><td>${r.transportadora||'—'}</td><td>${fmtDate(r.dt_venda)}</td><td>${fmtDate(r.dt_envio)}</td><td>${fmtDate(r.dt_entrega)}</td><td>${r.dias_transporte!=null?r.dias_transporte+'d':'—'}</td><td>${fmtBRL(r.frete)}</td><td><span class="badge ${cls}">${stLabel}</span></td></tr>`;
+  }).join('');
+  buildPrintWindow(`Relatório Mensal de Embarques — ${mesLabel}`,
+    `<table><thead><tr><th>Pedido</th><th>NF</th><th>Transportadora</th><th>Dt Venda</th><th>Dt Embarque</th><th>Dt Entrega</th><th>Dias Transp.</th><th>Frete</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`);
+}
+
+function exportAtrasosPDF() {
+  const data = getExportDataAtrasos();
+  const rows = data.map(r=>{
+    const atraso = getDiasAtraso(r);
+    const envio = r.dt_envio?new Date(r.dt_envio):null;
+    const prazo = r.prazo||7;
+    let prev='—'; if(envio){const d=new Date(envio);d.setDate(d.getDate()+prazo);prev=fmtDate(d.toISOString().slice(0,10));}
+    return `<tr><td>${r.pedido}</td><td>${r.nf}</td><td>${r.transportadora||'—'}</td><td>${fmtDate(r.dt_envio)}</td><td>${prev}</td><td style="color:#b00020;font-weight:700">${atraso>0?'+'+atraso+' dias':'Hoje'}</td><td>${fmtBRL(r.frete)}</td><td>${r.obs||'—'}</td></tr>`;
+  }).join('');
+  buildPrintWindow('Relatório de Pedidos em Atraso',
+    `<table><thead><tr><th>Pedido</th><th>NF</th><th>Transportadora</th><th>Dt Embarque</th><th>Previsão</th><th>Dias em Atraso</th><th>Frete</th><th>Observação</th></tr></thead><tbody>${rows}</tbody></table>`);
+}
+
+function exportAtrasadosPDF() {
+  const data = getExportDataAtrasadasTab();
+  const rows = data.map(r=>{
+    const atraso = getDiasAtraso(r);
+    const envio = r.dt_envio?new Date(r.dt_envio):null;
+    const prazo = r.prazo||7;
+    let prev='—'; if(envio){const d=new Date(envio);d.setDate(d.getDate()+prazo);prev=fmtDate(d.toISOString().slice(0,10));}
+    return `<tr><td>${r.pedido}</td><td>${r.nf}</td><td>${r.transportadora||'—'}</td><td>${fmtDate(r.dt_envio)}</td><td>${prev}</td><td style="color:#b00020;font-weight:700">${atraso>0?'+'+atraso+' dias':'Hoje'}</td><td>${fmtBRL(r.frete)}</td><td>${r.obs||'—'}</td></tr>`;
+  }).join('');
+  buildPrintWindow('Notas em Atraso',
+    `<table><thead><tr><th>Pedido</th><th>NF</th><th>Transportadora</th><th>Dt Embarque</th><th>Previsão</th><th>Dias em Atraso</th><th>Frete</th><th>Observação</th></tr></thead><tbody>${rows}</tbody></table>`);
+}
+
+function toCSV(headers, rows) {
+  const esc = v => `"${String(v).replace(/"/g,'""')}"`;
+  return [headers.map(esc).join(';'), ...rows.map(r=>r.map(esc).join(';'))].join('\n');
+}
+
+function downloadCSV(filename, content) {
+  const bom = '\uFEFF';
+  const blob = new Blob([bom+content], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+}
+
+function exportMensalExcel() {
+  const ALL_MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const mes = document.getElementById('flt-relmensal-mes').value;
+  const mesLabel = mes ? ALL_MONTHS[parseInt(mes,10)-1] : 'Todos';
+  const data = getExportDataMensal();
+  const headers = ['Pedido','NF','Transportadora','Dt Venda','Dt Embarque','Dt Entrega','Dias Transporte','Prazo','Frete (R$)','Status'];
+  const stLabel = {entregue:'Entregue',atrasado:'Atrasado',transito:'Em Trânsito',alerta:'No Limite'};
+  const rows = data.map(r=>[r.pedido,r.nf,r.transportadora||'',fmtDate(r.dt_venda),fmtDate(r.dt_envio),fmtDate(r.dt_entrega),r.dias_transporte!=null?r.dias_transporte:'',r.prazo||'',r.frete!=null?Number(r.frete).toFixed(2):'',stLabel[getStatus(r)]||'']);
+  downloadCSV(`embarques_${mesLabel.toLowerCase()}.csv`, toCSV(headers, rows));
+}
+
+function exportAtrasosExcel() {
+  const data = getExportDataAtrasos();
+  const headers = ['Pedido','NF','Transportadora','Dt Embarque','Previsão Entrega','Dias em Atraso','Frete (R$)','Observação'];
+  const rows = data.map(r=>{
+    const atraso = getDiasAtraso(r);
+    const envio = r.dt_envio?new Date(r.dt_envio):null;
+    const prazo = r.prazo||7;
+    let prev=''; if(envio){const d=new Date(envio);d.setDate(d.getDate()+prazo);prev=fmtDate(d.toISOString().slice(0,10));}
+    return [r.pedido,r.nf,r.transportadora||'',fmtDate(r.dt_envio),prev,atraso>0?'+'+atraso+' dias':'Hoje',r.frete!=null?Number(r.frete).toFixed(2):'',r.obs||''];
+  });
+  downloadCSV('pedidos_em_atraso.csv', toCSV(headers, rows));
+}
+
+function exportAtrasadosExcel() {
+  const data = getExportDataAtrasadasTab();
+  const headers = ['Pedido','NF','Transportadora','Dt Embarque','Previsão Entrega','Dias em Atraso','Frete (R$)','Observação'];
+  const rows = data.map(r=>{
+    const atraso = getDiasAtraso(r);
+    const envio = r.dt_envio?new Date(r.dt_envio):null;
+    const prazo = r.prazo||7;
+    let prev=''; if(envio){const d=new Date(envio);d.setDate(d.getDate()+prazo);prev=fmtDate(d.toISOString().slice(0,10));}
+    return [r.pedido,r.nf,r.transportadora||'',fmtDate(r.dt_envio),prev,atraso>0?'+'+atraso+' dias':'Hoje',r.frete!=null?Number(r.frete).toFixed(2):'',r.obs||''];
+  });
+  downloadCSV('notas_em_atraso.csv', toCSV(headers, rows));
 }
 
 // ═══════════════════════════════════════════════════
@@ -773,10 +1436,13 @@ function openAddModal() {
   editingIdx = null;
   document.getElementById('modal-title').textContent = 'Nova Nota Fiscal';
   ['inp-pedido','inp-nf','inp-obs','inp-nova-transp'].forEach(id=>document.getElementById(id).value='');
-  ['inp-venda','inp-envio','inp-entrega'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('inp-prazo').value = 7;
-  document.getElementById('inp-transp').value = '';
-  document.getElementById('inp-frete').value = '';
+  const tmp = new Date(); tmp.setDate(tmp.getDate()-1);
+  const today = tmp.toISOString().slice(0,10);
+  ['inp-venda','inp-entrega'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('inp-envio').value = today;
+  document.getElementById('inp-prazo').value = 10;
+  document.getElementById('inp-transp').value = 'ALFA';
+  document.getElementById('inp-frete').value = '60';
   document.getElementById('grp-nova-transp').style.display='none';
   document.getElementById('modal-nf').classList.add('open');
 }
@@ -878,6 +1544,17 @@ function markAtrasado(idx) {
 }
 
 // ═══════════════════════════════════════════════════
+//  DELETE NF
+// ═══════════════════════════════════════════════════
+function deleteNF(idx) {
+  const r = DB[idx];
+  if (!confirm(`Excluir NF ${r.nf} (Pedido ${r.pedido})?\n\nEssa ação não pode ser desfeita.`)) return;
+  DB.splice(idx, 1);
+  saveData(DB);
+  buildAll();
+}
+
+// ═══════════════════════════════════════════════════
 //  SECTION SWITCHING
 // ═══════════════════════════════════════════════════
 function showSection(name) {
@@ -886,8 +1563,11 @@ function showSection(name) {
   document.getElementById('sec-'+name).classList.add('active');
   event.currentTarget.classList.add('active');
   if(name==='atrasadas') buildAtrasadas();
+  if(name==='transito') buildTransito();
   if(name==='entregues') buildEntregues();
   if(name==='relatorio') buildReport();
+  if(name==='rel-mensal') buildRelMensal();
+  if(name==='rel-atrasos') buildRelAtrasos();
 }
 
 // ═══════════════════════════════════════════════════
@@ -897,8 +1577,11 @@ function buildAll() {
   buildKPIs();
   buildMain();
   buildAtrasadas();
+  buildTransito();
   buildEntregues();
   buildReport();
+  buildRelMensal();
+  buildRelAtrasos();
 }
 
 // ═══════════════════════════════════════════════════
@@ -906,6 +1589,170 @@ function buildAll() {
 // ═══════════════════════════════════════════════════
 document.getElementById('modal-nf').addEventListener('click', e=>{if(e.target===e.currentTarget)closeModal();});
 document.getElementById('modal-entrega').addEventListener('click', e=>{if(e.target===e.currentTarget)closeModal2();});
+
+// ═══════════════════════════════════════════════════
+//  IMPORT EXCEL
+// ═══════════════════════════════════════════════════
+let importParsedData = [];
+
+function openImportModal() {
+  importParsedData = [];
+  document.getElementById('import-filename').textContent = '';
+  document.getElementById('import-preview-area').style.display = 'none';
+  document.getElementById('btn-confirmar-import').style.display = 'none';
+  document.getElementById('import-file-input').value = '';
+  document.getElementById('modal-import').classList.add('open');
+}
+
+function closeImportModal() { document.getElementById('modal-import').classList.remove('open'); }
+document.getElementById('modal-import').addEventListener('click', e=>{if(e.target===e.currentTarget)closeImportModal();});
+
+// Drag & drop
+const dropEl = document.getElementById('import-drop');
+dropEl.addEventListener('dragover', e=>{e.preventDefault();dropEl.classList.add('dragover');});
+dropEl.addEventListener('dragleave', ()=>dropEl.classList.remove('dragover'));
+dropEl.addEventListener('drop', e=>{
+  e.preventDefault(); dropEl.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) processImportFile(file);
+});
+
+function handleImportFile(input) {
+  if (input.files[0]) processImportFile(input.files[0]);
+}
+
+function parseExcelDate(val) {
+  if (val === null || val === undefined || val === '') return null;
+
+  // JS Date object (SheetJS cellDates:true) — use local parts to avoid UTC shift
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    const y = val.getFullYear();
+    const m = String(val.getMonth()+1).padStart(2,'0');
+    const d = String(val.getDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // Excel serial number
+  if (typeof val === 'number') {
+    if (val < 1) return null;
+    // Excel epoch: Dec 30 1899; adjust for Lotus 1900 leap year bug
+    const serial = val > 59 ? val - 1 : val;
+    const d = new Date(Math.round((serial - 25568) * 86400 * 1000));
+    if (isNaN(d.getTime())) return null;
+    const y = d.getUTCFullYear();
+    const mo = String(d.getUTCMonth()+1).padStart(2,'0');
+    const dy = String(d.getUTCDate()).padStart(2,'0');
+    return `${y}-${mo}-${dy}`;
+  }
+
+  // String formats
+  if (typeof val === 'string') {
+    const s = val.trim();
+    // YYYY-MM-DD or YYYY-MM-DDTHH:...
+    const m1 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
+    // DD/MM/YYYY
+    const m2 = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+    // MM/DD/YYYY
+    const m3 = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m3) return `${m3[3]}-${m3[1]}-${m3[2]}`;
+  }
+
+  return null;
+}
+
+function processImportFile(file) {
+  document.getElementById('import-filename').textContent = '⏳ Lendo arquivo...';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:null});
+
+      importParsedData = [];
+      const preview = [];
+      let okCount=0, dupCount=0, errCount=0;
+
+      rows.forEach((row, i) => {
+        try {
+          const pedido = row['Pedido'] != null ? String(row['Pedido']).trim() : '';
+          const nf = row['NF'] != null ? String(row['NF']).trim() : '';
+          if (!pedido || !nf) { errCount++; preview.push(`<div class="import-row-err">Linha ${i+2}: Pedido ou NF vazio — ignorado</div>`); return; }
+
+          const transp = row['Transportadora'] ? String(row['Transportadora']).trim().toUpperCase() : '';
+          const dt_venda = parseExcelDate(row['Dt Venda']);
+          const dt_envio = parseExcelDate(row['Dt Embarque']);
+          const dt_entrega = parseExcelDate(row['Dt Entrega']);
+          const dias_transporte = row['Dias Transporte'] != null ? parseFloat(row['Dias Transporte']) : null;
+          const prazo = row['Prazo'] != null ? parseInt(row['Prazo']) : 7;
+          const frete = row['Frete (R$)'] != null ? parseFloat(row['Frete (R$)']) : null;
+          const statusRaw = row['Status'] ? String(row['Status']).toLowerCase().trim() : '';
+          let status_manual = null;
+          if (statusRaw.includes('entregue')) status_manual = 'entregue';
+          else if (statusRaw.includes('atraso')) status_manual = 'atrasado';
+
+          const isDup = DB.some(r => String(r.pedido).trim()===pedido && String(r.nf).trim()===nf);
+          const obj = {pedido, nf, transportadora:transp, dt_venda, dt_envio, dt_entrega,
+            dias_transporte: isNaN(dias_transporte)?null:dias_transporte,
+            prazo: isNaN(prazo)?7:prazo, frete: isNaN(frete)?null:frete,
+            obs:'', mes:'Importado', status_manual, total:null};
+
+          importParsedData.push({obj, isDup});
+          if (isDup) { dupCount++; preview.push(`<div class="import-row-dup">⚠ Linha ${i+2}: NF ${nf} / Pedido ${pedido} — duplicado</div>`); }
+          else { okCount++; preview.push(`<div class="import-row-ok">✔ Linha ${i+2}: NF ${nf} / Pedido ${pedido} — ${transp||'sem transp'} — ${dt_envio||'sem embarque'}</div>`); }
+        } catch(rowErr) {
+          errCount++;
+          preview.push(`<div class="import-row-err">Linha ${i+2}: Erro ao processar — ${rowErr.message}</div>`);
+        }
+      });
+
+      document.getElementById('import-filename').textContent = `✔ ${file.name}`;
+      document.getElementById('import-summary').innerHTML = `
+        <div class="import-stat"><span>Novos</span><span style="color:var(--green);font-weight:700">${okCount}</span></div>
+        <div class="import-stat"><span>Duplicados</span><span style="color:var(--yellow);font-weight:700">${dupCount}</span></div>
+        <div class="import-stat"><span>Erros</span><span style="color:var(--red);font-weight:700">${errCount}</span></div>
+        <div class="import-stat"><span>Total linhas</span><span style="font-weight:700">${rows.length}</span></div>
+      `;
+      document.getElementById('import-preview').innerHTML = preview.join('');
+      document.getElementById('import-dup-warning').style.display = dupCount > 0 ? 'block' : 'none';
+      document.getElementById('import-preview-area').style.display = 'block';
+      if (okCount > 0 || (dupCount > 0)) document.getElementById('btn-confirmar-import').style.display = 'inline-flex';
+    } catch(err) {
+      document.getElementById('import-filename').textContent = '❌ Erro ao ler arquivo: ' + err.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function confirmImport() {
+  const overwrite = document.getElementById('import-overwrite').checked;
+  let added=0, replaced=0, skipped=0;
+  importParsedData.forEach(({obj, isDup}) => {
+    if (isDup) {
+      if (overwrite) {
+        const idx = DB.findIndex(r=>String(r.pedido).trim()===obj.pedido && String(r.nf).trim()===obj.nf);
+        if (idx>=0) { DB[idx] = {...DB[idx], ...obj}; replaced++; }
+      } else { skipped++; }
+    } else { DB.push(obj); added++; }
+  });
+  saveData(DB);
+  closeImportModal();
+  buildAll();
+  // Repopulate transportadora filters after import
+  const transportadoras = [...new Set(DB.map(r=>r.transportadora).filter(t=>t&&t.length>0))].sort();
+  ['flt-transportadora','flt-atraso-transp','flt-transito-transp','flt-entregues-transp','flt-relmensal-transp','flt-relatrasos-transp'].forEach(selId => {
+    const sel = document.getElementById(selId); if (!sel) return;
+    const cur = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    transportadoras.forEach(t => { const o=document.createElement('option');o.value=o.textContent=t;sel.appendChild(o); });
+    sel.value = cur;
+  });
+  alert(`✔ Importação concluída!\n\nAdicionados: ${added}\nSubstituídos: ${replaced}\nIgnorados (duplicados): ${skipped}`);
+}
 
 // ═══════════════════════════════════════════════════
 //  START
